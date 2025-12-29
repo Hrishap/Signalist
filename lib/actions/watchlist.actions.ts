@@ -121,27 +121,37 @@ export const getWatchlistWithData = async () => {
 
     if (watchlist.length === 0) return [];
 
-    const stocksWithData = await Promise.all(
-      watchlist.map(async (item) => {
-        const stockData = await getStocksDetails(item.symbol);
+const stocksWithData = await Promise.all(
+  watchlist.map(async (item) => {
+    const stockData = await getStocksDetails(item.symbol);
 
-        if (!stockData) {
-          console.warn(`Failed to fetch data for ${item.symbol}`);
-          return item;
-        }
+    if (!stockData) {
+      return {
+        company: item.company,
+        symbol: item.symbol,
+        currentPrice: null,
+        priceFormatted: '—',
+        changeFormatted: '—',
+        changePercent: 0,
+        marketCap: '—',
+        peRatio: '—',
+        restricted: true,
+      };
+    }
 
-        return {
-          company: stockData.company,
-          symbol: stockData.symbol,
-          currentPrice: stockData.currentPrice,
-          priceFormatted: stockData.priceFormatted,
-          changeFormatted: stockData.changeFormatted,
-          changePercent: stockData.changePercent,
-          marketCap: stockData.marketCapFormatted,
-          peRatio: stockData.peRatio,
-        };
-      }),
-    );
+    return {
+      company: stockData.company,
+      symbol: stockData.symbol,
+      currentPrice: stockData.currentPrice,
+      priceFormatted: stockData.priceFormatted,
+      changeFormatted: stockData.changeFormatted,
+      changePercent: stockData.changePercent,
+      marketCap: stockData.marketCapFormatted,
+      peRatio: stockData.peRatio,
+    };
+  })
+);
+
 
     return JSON.parse(JSON.stringify(stocksWithData));
   } catch (error) {

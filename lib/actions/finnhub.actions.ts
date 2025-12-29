@@ -179,54 +179,50 @@ export const searchStocks = cache(async (query?: string): Promise<StockWithWatch
   }
 });
 
-// Fetch stock details by symbol
-export const getStocksDetails = cache(async (symbol: string) => {
+export const getStocksDetails = async (symbol: string) => {
   const cleanSymbol = symbol.trim().toUpperCase();
+  const token = process.env.FINNHUB_API_KEY;
+
+  if (!token) {
+    console.error('FINNHUB API key missing');
+    return null;
+  }
 
   try {
     const [quote, profile, financials] = await Promise.all([
+      fetchJSON(`${FINNHUB_BASE_URL}/quote?symbol=${cleanSymbol}&token=${token}`),
       fetchJSON(
-        // Price data - no caching for accuracy
-        `${FINNHUB_BASE_URL}/quote?symbol=${cleanSymbol}&token=${NEXT_PUBLIC_FINNHUB_API_KEY}`
-      ),
-      fetchJSON(
-        // Company info - cache 1hr (rarely changes)
-        `${FINNHUB_BASE_URL}/stock/profile2?symbol=${cleanSymbol}&token=${NEXT_PUBLIC_FINNHUB_API_KEY}`,
+        `${FINNHUB_BASE_URL}/stock/profile2?symbol=${cleanSymbol}&token=${token}`,
         3600
       ),
       fetchJSON(
-        // Financial metrics (P/E, etc.) - cache 30min
-        `${FINNHUB_BASE_URL}/stock/metric?symbol=${cleanSymbol}&metric=all&token=${NEXT_PUBLIC_FINNHUB_API_KEY}`,
+        `${FINNHUB_BASE_URL}/stock/metric?symbol=${cleanSymbol}&metric=all&token=${token}`,
         1800
       ),
     ]);
 
-    // Type cast the responses
     const quoteData = quote as QuoteData;
     const profileData = profile as ProfileData;
     const financialsData = financials as FinancialsData;
 
-    // Check if we got valid quote and profile data
-    if (!quoteData?.c || !profileData?.name)
-      throw new Error('Invalid stock data received from API');
-
-    const changePercent = quoteData.dp || 0;
-    const peRatio = financialsData?.metric?.peNormalizedAnnual || null;
+    if (!quoteData?.c || !profileData?.name) return null;
 
     return {
       symbol: cleanSymbol,
-      company: profileData?.name,
+      company: profileData.name,
       currentPrice: quoteData.c,
-      changePercent,
+      changePercent: quoteData.dp ?? 0,
       priceFormatted: formatPrice(quoteData.c),
-      changeFormatted: formatChangePercent(changePercent),
-      peRatio: peRatio?.toFixed(1) || '—',
+      changeFormatted: formatChangePercent(quoteData.dp ?? 0),
+      peRatio:
+        financialsData?.metric?.peNormalizedAnnual?.toFixed(1) ?? '—',
       marketCapFormatted: formatMarketCapValue(
-        profileData?.marketCapitalization || 0
+        profileData.marketCapitalization ?? 0
       ),
     };
-  } catch (error) {
-    console.error(`Error fetching details for ${cleanSymbol}:`, error);
-    throw new Error('Failed to fetch stock details');
+  } catch (err) {
+    // 🔴 DO NOT THROW
+    console.warn(`Finnhub blocked ${cleanSymbol}`);
+    return null;
   }
-});
+};
